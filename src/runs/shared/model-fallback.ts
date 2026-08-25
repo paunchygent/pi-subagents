@@ -451,8 +451,23 @@ export function isRetryableModelFailure(error: string | undefined): boolean {
 	return RETRYABLE_MODEL_FAILURE_PATTERNS.some((pattern) => pattern.test(error));
 }
 
-export function recordRetryableModelFailure(model: string | undefined, error: string | undefined): void {
-	if (!model || !isRetryableModelFailure(error)) return;
+export function isRetryableModelAttemptFailure(input: {
+	error: string | undefined;
+	usage: Usage;
+	toolCount: number;
+}): boolean {
+	if (isRetryableModelFailure(input.error)) return true;
+	if (!input.error || TOOL_FAILURE_PREFIX.test(input.error.trim()) || isContextOverflow(input.error)) return false;
+	return input.toolCount === 0
+		&& input.usage.turns > 0
+		&& input.usage.input === 0
+		&& input.usage.output === 0
+		&& input.usage.cacheRead === 0
+		&& input.usage.cacheWrite === 0;
+}
+
+export function recordRetryableModelFailure(model: string | undefined, error: string | undefined, retryable = isRetryableModelFailure(error)): void {
+	if (!model || !error || !retryable) return;
 	const { provider, modelId } = parseModelKey(model);
 	recordModelFailure({ modelId, reason: error, ...(provider ? { provider } : {}) });
 }

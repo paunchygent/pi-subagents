@@ -77,7 +77,7 @@ import {
 	formatSubagentModelVerificationError,
 	formatModelAttemptNote,
 	isContextOverflow,
-	isRetryableModelFailure,
+	isRetryableModelAttemptFailure,
 	recordRetryableModelFailure,
 } from "../shared/model-fallback.ts";
 import {
@@ -1986,8 +1986,12 @@ async function runSyncCompletionInner(
 				attempt.error = startupError;
 				break modelAttemptsLoop;
 			}
-			const retryableModelFailure = isRetryableModelFailure(result.error);
-			if (retryableModelFailure) recordRetryableModelFailure(result.model ?? candidate, result.error);
+			const retryableModelFailure = isRetryableModelAttemptFailure({
+				error: result.error,
+				usage: result.usage,
+				toolCount: result.progressSummary?.toolCount ?? 0,
+			});
+			if (retryableModelFailure) recordRetryableModelFailure(result.model ?? candidate, result.error, true);
 			if (isContextOverflow(result.error)) {
 				result.contextOverflow = true;
 				attemptNotes.push(`[fallback] ${attempt.model} failed: context overflow — the input exceeds this model's context window. Reduce the task input or use a model with a larger context window.`);

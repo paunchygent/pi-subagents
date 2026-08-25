@@ -5,6 +5,7 @@ import {
 	fuzzyResolveModel,
 	formatSubagentModelVerificationError,
 	isContextOverflow,
+	isRetryableModelAttemptFailure,
 	isRetryableModelFailure,
 	normalizeModelSegment,
 	recordRetryableModelFailure,
@@ -207,6 +208,15 @@ describe("model fallback helpers", () => {
 		assert.equal(isRetryableModelFailure("mcp:tools.search failed with exit code 1"), false);
 		assert.equal(isRetryableModelFailure("Provider error: bash failed (exit 1): request timed out"), true);
 		assert.equal(isRetryableModelFailure("bash failed (exit unknown): request timed out"), true);
+	});
+
+	it("falls back after provider turns that produced no model or tool work", () => {
+		const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 1 };
+
+		assert.equal(isRetryableModelAttemptFailure({ error: "unclassified provider stop", usage, toolCount: 0 }), true);
+		assert.equal(isRetryableModelAttemptFailure({ error: "unclassified provider stop", usage: { ...usage, input: 1 }, toolCount: 0 }), false);
+		assert.equal(isRetryableModelAttemptFailure({ error: "unclassified provider stop", usage, toolCount: 1 }), false);
+		assert.equal(isRetryableModelAttemptFailure({ error: "context length exceeded", usage, toolCount: 0 }), false);
 	});
 });
 

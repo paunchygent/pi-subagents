@@ -106,6 +106,18 @@ describe("background-work provider protocol", () => {
 		assert.deepEqual(listBackgroundWorkProviders(), []);
 	});
 
+	it("accepts retained session-file identities", () => {
+		const sessionId = `/retained/${"nested/".repeat(64)}session.jsonl`;
+		registerBackgroundWorkProvider({
+			name: "patty",
+			listActiveWork: () => [{ id: "job", sessionId }],
+		});
+
+		assert.deepEqual(snapshotBackgroundWork(sessionId).items, [
+			{ provider: "patty", id: "job", sessionId },
+		]);
+	});
+
 	it("validates provider metadata and work items strictly", () => {
 		assert.throws(() => registerBackgroundWorkProvider({ name: " patty", listActiveWork: () => [] }), /leading or trailing/);
 		assert.throws(() => registerBackgroundWorkProvider({ name: "patty", listActiveWork: () => [], wakeChannels: ["done", "done"] }), /duplicates/);
