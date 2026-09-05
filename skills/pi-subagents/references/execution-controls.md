@@ -157,6 +157,7 @@ subagent({ action: "resume", id: "nested-run-id", message: "Continue this nested
 
 Resume behavior:
 - `resume` revives paused, completed, or failed async/foreground children from persisted session files; stopped runs remain non-resumable, and it does not interrupt live top-level async children.
+- A mutation-capable child becomes non-resumable after its persisted session crosses a Pi compaction boundary. Launch a fresh same-role child from durable task state instead. Explicitly read-only children remain resumable.
 - Use `steer` for acknowledged guidance to a live top-level async child.
 - A live nested run can still receive a non-destructive `resume` follow-up through its owner route.
 - If an async child has completed, `resume` revives it by starting a new async child from the persisted child session file.

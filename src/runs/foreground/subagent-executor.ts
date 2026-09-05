@@ -91,6 +91,7 @@ import {
 	stripDetailsOutputsForIntercomReceipt,
 } from "../../intercom/result-intercom.ts";
 import { applySteeringRecoveryAgentConfig, asyncReviveRequiresRecoveryDescriptor, buildRevivedAsyncTask, readAsyncRecoveryDescriptor, resolveAsyncResumeTarget, resolveAsyncRunLocation } from "../background/async-resume.ts";
+import { compactedMutationResumeReason } from "../shared/session-compaction-guard.ts";
 import { deliverInterruptRequest, readRevivalBriefs, requestAsyncSteer, type SteerDeliveryMode } from "../background/control-channel.ts";
 import { updateSteeringTarget, waitForSteeringAction } from "../background/steering.ts";
 import { canQueueRetainedAsyncFollowUp, steerAsyncRun } from "./async-steering-action.ts";
@@ -1935,6 +1936,26 @@ async function resumeAsyncRun(input: {
 	if (target.source === "async" && asyncReviveRequiresRecoveryDescriptor(target)) {
 		return { content: [{ type: "text", text: `Async child '${target.runId}' is missing its required run fan-out recovery identity. Start a new run instead.` }], isError: true, details: { mode: "management", results: [] } };
 	}
+	const recoveryAgentConfig = recoveryDescriptor ? applySteeringRecoveryAgentConfig(baseAgentConfig, recoveryDescriptor) : baseAgentConfig;
+	try {
+		const compactionReason = compactedMutationResumeReason(revivalSessionFile, recoveryAgentConfig);
+		if (compactionReason) {
+			return {
+				content: [{
+					type: "text",
+					text: `Cannot resume '${target.runId}' child ${target.index}: ${compactionReason}. Launch a fresh '${target.agent}' child from durable task state instead.`,
+				}],
+				isError: true,
+				details: { mode: "management", results: [] },
+			};
+		}
+	} catch (error) {
+		return {
+			content: [{ type: "text", text: `Cannot resume '${target.runId}' child ${target.index}: failed to check the persisted session for compaction: ${error instanceof Error ? error.message : String(error)}` }],
+			isError: true,
+			details: { mode: "management", results: [] },
+		};
+	}
 	const runId = randomUUID();
 	const topLevelResume = depth === 0 && !resolveInheritedNestedRouteFromEnv() && !input.params.workflowParentRunId;
 	let activeAsyncCapacity: ActiveAsyncCapacityHandle | undefined;
@@ -1958,7 +1979,6 @@ async function resumeAsyncRun(input: {
 		if (error instanceof ActiveAsyncCapacityError) return { content: [{ type: "text", text: error.message }], isError: true, details: { mode: "single", results: [], activeAsyncCapacity: error.snapshot } };
 		return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], isError: true, details: { mode: "single", results: [] } };
 	}
-	const recoveryAgentConfig = recoveryDescriptor ? applySteeringRecoveryAgentConfig(baseAgentConfig, recoveryDescriptor) : baseAgentConfig;
 	const agentConfig = intercomBridge.active ? applyIntercomBridgeToAgent(recoveryAgentConfig, intercomBridge) : recoveryAgentConfig;
 	const foregroundContract = target.source === "foreground" ? target.resumeContract : undefined;
 	const outputSchema = input.params.outputSchema ?? foregroundContract?.outputSchema ?? recoveryDescriptor?.structuredOutputSchema;

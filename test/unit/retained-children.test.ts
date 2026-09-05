@@ -18,6 +18,8 @@ interface WriteRunOptions {
 	recoverySourceRunId?: string;
 	recoveryAgent?: string;
 	recoveryCwd?: string;
+	recoveryTools?: string[];
+	compacted?: boolean;
 }
 
 function writeRetainedRun(root: string, index: number, options: WriteRunOptions = {}): void {
@@ -25,7 +27,11 @@ function writeRetainedRun(root: string, index: number, options: WriteRunOptions 
 	const sessionFile = path.join(root, "sessions", `${runId}.jsonl`);
 	if (options.sessionFile !== "missing" && options.sessionFile !== "omitted") {
 		fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
-		fs.writeFileSync(sessionFile, "", "utf-8");
+		fs.writeFileSync(
+			sessionFile,
+			options.compacted ? `${JSON.stringify({ type: "compaction", id: `compact-${index}` })}\n` : "",
+			"utf-8",
+		);
 	}
 	const asyncDir = path.join(root, "runs", runId);
 	fs.mkdirSync(asyncDir, { recursive: true });
@@ -73,6 +79,7 @@ function writeRetainedRun(root: string, index: number, options: WriteRunOptions 
 			inheritProjectContext: false,
 			inheritSkills: false,
 			outputMode: "inline",
+			...(options.recoveryTools ? { tools: options.recoveryTools } : {}),
 			maxSubagentDepth: 2,
 			share: false,
 		}), "utf-8");
@@ -166,6 +173,27 @@ describe("retained child roster", () => {
 			assert.match(formatted, /resumability: not resumable \(no persisted session file\)/);
 			assert.doesNotMatch(formatted, /resume: subagent/);
 			assert.match(formatted, /No resumable retained child is listed\. Launch a same-role fallback challenge and label it as fallback\./);
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("marks compacted mutation-capable children as rotated while keeping read-only children resumable", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-retained-children-compacted-"));
+		try {
+			writeRetainedRun(root, 1, { compacted: true, recoveryTools: ["read", "write"] });
+			writeRetainedRun(root, 2, { compacted: true, recoveryTools: ["read", "grep", "find", "ls"] });
+
+			const children = listRetainedChildren(path.join(root, "runs"), "parent-a");
+			const formatted = formatRetainedChildren(children);
+			const writer = children.find((child) => child.runId === "child-1");
+			const reviewer = children.find((child) => child.runId === "child-2");
+
+			assert.equal(writer?.resumability.state, "not-resumable");
+			assert.match(writer?.resumability.state === "not-resumable" ? writer.resumability.reason : "", /crossed a compaction boundary; launch a fresh same-role child/);
+			assert.equal(reviewer?.resumability.state, "resumable");
+			assert.doesNotMatch(formatted, /resume: subagent\(\{ action: "resume", id: "child-1"/);
+			assert.match(formatted, /resume: subagent\(\{ action: "resume", id: "child-2"/);
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}

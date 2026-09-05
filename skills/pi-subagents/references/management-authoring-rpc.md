@@ -18,7 +18,7 @@ subagent({ action: "list" })
 subagent({ action: "children.list" })
 ```
 
-Lists up to the last 10 retained workflow children from this parent session with explicit `resumable` or `not resumable` rows. Resume only rows reported `resumable`. Send a simple follow-up or implementation challenge with `subagent({ action: "resume", id: "<run-id>", message: "..." })`. Continue one inside a workflow with `runs.run(key, { resume: "<run-id>", task: "follow-up" })`; the revived child keeps its stored agent, model, and tool contract. If no resumable child is listed, start a same-role fallback challenge and label it as fallback. `steer` with `mode: "follow_up"` only queues text for the next `resume` when the child has already completed.
+Lists up to the last 10 retained workflow children from this parent session with explicit `resumable` or `not resumable` rows. Resume only rows reported `resumable`. A mutation-capable child is reported `not resumable` after its persisted session crosses a Pi compaction boundary; start a fresh same-role child from durable task state instead. Send a simple follow-up or implementation challenge with `subagent({ action: "resume", id: "<run-id>", message: "..." })`. Continue one inside a workflow with `runs.run(key, { resume: "<run-id>", task: "follow-up" })`; the revived child keeps its stored agent, model, and tool contract. If no resumable child is listed, start a same-role fallback challenge and label it as fallback. `steer` with `mode: "follow_up"` only queues text for the next `resume` when the child has already completed.
 
 ### Refinement overlays
 

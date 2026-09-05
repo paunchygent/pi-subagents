@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Refuse mutation-capable child revival after its persisted Pi session has crossed a compaction boundary, and direct callers to launch a fresh same-role child from durable task state.
 - Resolve the `advisor` builtin alias through the bundled `oracle` definition in model listings. Thanks to [@smileBeda](https://github.com/smileBeda) for #1502.
 - Bypass repository fsmonitor hooks when collecting mutation evidence. Thanks to [@jpriverar](https://github.com/jpriverar) for #1497.
 - Avoid the fatal Node `ReadFileUtf8` retention path. Thanks to [@pgoodjohn](https://github.com/pgoodjohn) for #1501.

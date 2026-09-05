@@ -232,7 +232,7 @@ subagent({ action: "doctor" })
 
 ### resume
 
-`resume` revives a paused, completed, or failed async/foreground child by starting a new child from its stored session file. Stopped runs remain non-resumable, and it does not interrupt a live top-level async child. Use `steer` for acknowledged live async guidance.
+`resume` revives a paused, completed, or failed async/foreground child by starting a new child from its stored session file. Stopped runs remain non-resumable, and it does not interrupt a live top-level async child. Mutation-capable children also become non-resumable after their stored session crosses a Pi compaction boundary; start a fresh same-role child from durable task state instead. Explicitly read-only children remain resumable. Use `steer` for acknowledged live async guidance.
 
 - Multi-child async runs and remembered foreground single, parallel, or chain runs can be revived by passing `index` to choose the child.
 - Nested runs can be resumed by nested id when their live route or persisted nested session metadata is available.

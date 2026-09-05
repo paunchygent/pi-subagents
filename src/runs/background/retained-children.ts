@@ -3,6 +3,7 @@ import { listAsyncRuns, type AsyncRunSummary } from "./async-status.ts";
 import { readAsyncRecoveryDescriptor } from "./async-resume.ts";
 import type { TokenUsage } from "../../shared/types.ts";
 import { parallelHandoffPath, resolveRetainedWorktreeCwd } from "../shared/parallel-handoff.ts";
+import { compactedMutationResumeReason } from "../shared/session-compaction-guard.ts";
 
 const MAX_RETAINED_CHILDREN = 10;
 const MAX_RETAINED_CHILD_CANDIDATES = 100;
@@ -62,6 +63,12 @@ function childResumability(run: AsyncRunSummary, step: AsyncRunSummary["steps"][
 		if (recoveryDescriptor.agent !== step.agent) return { state: "not-resumable", reason: `recovery descriptor belongs to agent ${recoveryDescriptor.agent}` };
 	} catch (error) {
 		return { state: "not-resumable", reason: `invalid recovery descriptor: ${error instanceof Error ? error.message : String(error)}` };
+	}
+	try {
+		const compactionReason = compactedMutationResumeReason(session.sessionPath, recoveryDescriptor);
+		if (compactionReason) return { state: "not-resumable", reason: `${compactionReason}; launch a fresh same-role child from durable task state` };
+	} catch (error) {
+		return { state: "not-resumable", reason: `persisted session file could not be checked for compaction: ${error instanceof Error ? error.message : String(error)}` };
 	}
 	let requiredCwd: string | undefined;
 	try {

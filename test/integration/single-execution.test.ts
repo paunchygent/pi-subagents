@@ -4225,6 +4225,37 @@ describe("single sync execution", { skip: !available ? "pi packages not availabl
 		assert.equal(fs.readFileSync(configuredOutput, "utf-8"), "resumed report");
 	});
 
+	it("refuses to revive a mutation-capable foreground child after session compaction", { skip: !createSubagentExecutor ? "executor not importable" : undefined }, async () => {
+		const executor = makeExecutor([makeAgent("worker", { tools: ["read", "write"] })]);
+		mockPi.onCall({ output: "durable checkpoint recorded" });
+		const firstResult = await executor.execute(
+			"workflow-compacted-writer-first",
+			{ async: false, workflowScript: `return runs.run("writer", { agent: "worker", task: "Record the durable checkpoint", acceptance: false });` },
+			new AbortController().signal,
+			undefined,
+			makeMinimalCtx(tempDir),
+		);
+		assert.equal(firstResult.isError, undefined, firstResult.content[0]?.text ?? "workflow failed");
+		const first = firstResult.details.workflow?.value as { runId?: string };
+		const sessionFile = firstResult.details.results[0]?.sessionFile;
+		assert.ok(first.runId);
+		assert.ok(sessionFile);
+		fs.appendFileSync(sessionFile, `${JSON.stringify({ type: "compaction", id: "compact-writer", summary: "durable state" })}\n`, "utf-8");
+
+		const resumedResult = await executor.execute(
+			"resume-compacted-writer",
+			{ action: "resume", id: first.runId, message: "Continue editing" },
+			new AbortController().signal,
+			undefined,
+			makeMinimalCtx(tempDir),
+		);
+
+		assert.equal(resumedResult.isError, true);
+		assert.match(resumedResult.content[0]?.text ?? "", /crossed a compaction boundary/);
+		assert.match(resumedResult.content[0]?.text ?? "", /Launch a fresh 'worker' child from durable task state instead/);
+		assert.equal(mockPi.callCount(), 1);
+	});
+
 	it("fails closed on an invalid explicit foreground resume output schema", { skip: !createSubagentExecutor ? "executor not importable" : undefined }, async () => {
 		mockPi.onCall({ output: "first result" });
 		const result = await makeExecutor([makeAgent("echo")]).execute(
